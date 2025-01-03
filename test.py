@@ -1,5 +1,6 @@
 import vllm_allocator_adaptor
 import torch
+from typing import Optional
 
 def find_loaded_library(lib_name) -> Optional[str]:
     """
