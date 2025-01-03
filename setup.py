@@ -4,7 +4,10 @@ import sys
 from torch.utils.cpp_extension import CUDA_HOME
 
 # Adjust this if needed for your CUDA install:
-cuda_include_dir = CUDA_HOME + "/include"
+if CUDA_HOME is not None:
+    cuda_include_dir = CUDA_HOME + "/include"
+else:
+    cuda_include_dir = "/usr/local/cuda/include"
 
 module = Extension(
     name="vllm_allocator_adaptor_c",
