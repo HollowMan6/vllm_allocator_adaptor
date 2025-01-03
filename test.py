@@ -45,7 +45,7 @@ def python_free(ptr, size):
 
 new_alloc = get_pluggable_allocator(python_malloc, python_free)
 
-mem_pool = torch.cuda.memory.MemPool(new_alloc)
+mem_pool = torch.cuda.memory.MemPool(new_alloc._allocator)
 
 with torch.cuda.memory.use_mem_pool(mem_pool):
     x = torch.empty(2, 3, device='cuda')
