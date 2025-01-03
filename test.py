@@ -19,11 +19,19 @@ def python_free(ptr, size):
 
 # default memory pool
 x = torch.empty(2, 3, device='cuda')
+x.zero_()
 print(x)
 
 with use_memory_pool_with_allocator(python_malloc, python_free):
     # custom memory pool
     y = torch.empty(2, 3, device='cuda')
+    y.zero_()
+    y += 1
     print(y)
     z = torch.empty(2, 3, device='cuda')
+    z.zero_()
+    z += 2
     print(z)
+
+output = x + y + z
+print(output)
