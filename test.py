@@ -1,6 +1,7 @@
 import torch
 import ctypes
 
+from typing import Tuple
 from vllm_allocator_adaptor import use_memory_pool_with_allocator
 
 from cuda.bindings import driver
@@ -8,10 +9,13 @@ import torch
 
 pointer_to_data = {}
 
-def python_malloc_callback(py_alignedSize, py_d_mem, py_memHandle):
-    print(f"{(py_alignedSize, py_d_mem, py_memHandle)=}")
+HandleType = Tuple[int, int, int, int]
+
+def python_malloc_callback(allocation_handle: HandleType) -> None:
+    py_device, py_alignedSize, py_d_mem, py_p_memHandle = allocation_handle
+    print(f"{(py_device, py_alignedSize, py_d_mem, py_p_memHandle)=}")
     global pointer_to_data
-    pointer_to_data[py_d_mem] = (py_alignedSize, py_memHandle)
+    pointer_to_data[py_d_mem] = (py_device, py_alignedSize, py_d_mem, py_p_memHandle)
     return
     # allocate ptr
     result, ptr = driver.cuMemAddressReserve(size, 0, 0, 0)
@@ -42,11 +46,9 @@ def python_malloc_callback(py_alignedSize, py_d_mem, py_memHandle):
     print(f"Python side: Malloc called with size={size}, ptr=0x{ptr:x}")
     return ptr.value
 
-def python_free_callback(ptr, size):
+def python_free_callback(ptr: int) -> HandleType:
     global pointer_to_data
-    py_alignedSize, py_memHandle = pointer_to_data.pop(ptr)
-    assert py_alignedSize == size
-    return py_memHandle
+    return pointer_to_data.pop(ptr)
 
 # default memory pool
 shape = (1024, 1024)
