@@ -16,7 +16,8 @@ char error_string[1024];
     do { \
         CUresult error = condition; \
         if (error != 0) { \
-            cuGetErrorString(error, error_string); \
+            chat* error_string; \
+            cuGetErrorString(error, &error_string); \
             std::cerr << "[vllm_allocator_adaptor_c] CUDA Error: " << error_string << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
             return nullptr; \
         } \
