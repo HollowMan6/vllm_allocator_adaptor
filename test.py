@@ -6,7 +6,9 @@ from vllm_allocator_adaptor import use_memory_pool_with_allocator
 from cuda.bindings import driver
 import torch
 
-def python_malloc(size):
+def python_malloc_callback(py_alignedSize, py_d_mem, py_memHandle):
+    print(f"{(py_alignedSize, py_d_mem, py_memHandle)=}")
+    return
     # allocate ptr
     result, ptr = driver.cuMemAddressReserve(size, 0, 0, 0)
     assert result.value == 0

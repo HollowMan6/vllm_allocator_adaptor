@@ -23,8 +23,8 @@
 
 // Global references to Python callables
 // NOTE: this is borrowed reference, so we don't need to DECREF them.
-static PyObject* g_python_malloc = nullptr;
-static PyObject* g_python_free   = nullptr;
+static PyObject* g_python_malloc_callback = nullptr;
+static PyObject* g_python_free_callback   = nullptr;
 
 extern "C" {
 
@@ -74,32 +74,43 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
 
     return reinterpret_cast<void*>(d_mem);
 
-    CUdeviceptr dptr;
-    CUDA_CHECK(cuMemAlloc(&dptr, size));
-
-    return reinterpret_cast<void*>(dptr);
-
-    // device and stream are not used.
-    // we will just use the current device and stream.
-
-    if (!g_python_malloc) {
-        std::cerr << "[vllm_allocator_adaptor_c] ERROR: g_python_malloc not set.\n";
+    if (!g_python_malloc_callback) {
+        std::cerr << "[vllm_allocator_adaptor_c] ERROR: g_python_malloc_callback not set.\n";
         return nullptr;
     }
 
     // Acquire GIL (not in stable ABI officially, but often works)
     PyGILState_STATE gstate = PyGILState_Ensure();
 
-    // Create Python int for 'size'
-    PyObject* py_size = PyLong_FromSsize_t(size);
-    if (!py_size) {
+    // Create Python int for 'alignedSize'
+    PyObject* py_alignedSize = PyLong_FromSsize_t(alignedSize);
+    if (!py_alignedSize) {
         PyGILState_Release(gstate);
         return nullptr;
     }
 
-    // Call python_malloc(py_size)
-    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_malloc, py_size, NULL);
-    Py_DECREF(py_size);
+    // Create Python int for 'd_mem'
+    PyObject* py_d_mem = PyLong_FromSsize_t(reinterpret_cast<size_t>(d_mem));
+    if (!py_d_mem) {
+        Py_DECREF(py_alignedSize);
+        PyGILState_Release(gstate);
+        return nullptr;
+    }
+
+    // Create Python int for '&memHandle'
+    PyObject* py_memHandle = PyLong_FromSsize_t(reinterpret_cast<size_t>(&memHandle));
+    if (!py_memHandle) {
+        Py_DECREF(py_alignedSize);
+        Py_DECREF(py_d_mem);
+        PyGILState_Release(gstate);
+        return nullptr;
+    }
+
+    // Call g_python_malloc_callback(py_alignedSize, py_d_mem, py_memHandle)
+    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_malloc_callback, py_alignedSize, py_d_mem, py_memHandle, NULL);
+    Py_DECREF(py_alignedSize);
+    Py_DECREF(py_d_mem);
+    Py_DECREF(py_memHandle);
 
     if (!py_result) {
         PyErr_Print();
@@ -107,12 +118,8 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
         return nullptr;
     }
 
-    // Expect an integer pointer
-    void* ptr = reinterpret_cast<void*>(PyLong_AsSize_t(py_result));
-    Py_DECREF(py_result);
-
     PyGILState_Release(gstate);
-    return ptr;
+    return d_mem;
 }
 
 void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
@@ -123,8 +130,8 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
     // device and stream are not used.
     // we will just use the current device and stream.
 
-    if (!g_python_free) {
-        std::cerr << "[vllm_allocator_adaptor_c] ERROR: g_python_free not set.\n";
+    if (!g_python_free_callback) {
+        std::cerr << "[vllm_allocator_adaptor_c] ERROR: g_python_free_callback not set.\n";
         return;
     }
 
@@ -134,7 +141,7 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
     PyObject* py_ptr  = PyLong_FromSize_t(reinterpret_cast<size_t>(ptr));
     PyObject* py_size = PyLong_FromSsize_t(size);
 
-    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_free, py_ptr, py_size, NULL);
+    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_free_callback, py_ptr, py_size, NULL);
 
     if (!py_result) {
         PyErr_Print();
@@ -156,14 +163,14 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
 // Python-exposed function: init_module(python_malloc, python_free)
 static PyObject* py_init_module(PyObject* self, PyObject* args)
 {
-    PyObject* malloc_func = nullptr;
-    PyObject* free_func   = nullptr;
+    PyObject* malloc_callback = nullptr;
+    PyObject* free_callback   = nullptr;
 
-    if (!PyArg_ParseTuple(args, "OO", &malloc_func, &free_func)) {
+    if (!PyArg_ParseTuple(args, "OO", &malloc_callback, &free_callback)) {
         return nullptr;
     }
 
-    if (!PyCallable_Check(malloc_func) || !PyCallable_Check(free_func)) {
+    if (!PyCallable_Check(malloc_callback) || !PyCallable_Check(free_callback)) {
         PyErr_SetString(PyExc_TypeError, "Both arguments must be callables");
         return nullptr;
     }
@@ -171,8 +178,8 @@ static PyObject* py_init_module(PyObject* self, PyObject* args)
     // Save the Python callables
     // This module does not handle GC of these objects, so they must be kept alive
     // outside of this module.
-    g_python_malloc = malloc_func;
-    g_python_free   = free_func;
+    g_python_malloc_callback = malloc_callback;
+    g_python_free_callback   = free_callback;
 
     Py_RETURN_NONE;
 }
