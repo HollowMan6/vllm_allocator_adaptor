@@ -226,6 +226,7 @@ static PyObject* python_unmap_and_release(PyObject* self, PyObject* args) {
         // PyArg_ParseTuple sets an error if it fails
         return nullptr;
     }
+    std::cout << "[vllm_allocator_adaptor_c] " << "recv_device" << recv_device << "recv_size" << recv_size << "recv_d_mem" << recv_d_mem << "recv_p_memHandle" << recv_p_memHandle << std::endl;
 
     CUdeviceptr d_mem_ptr = (CUdeviceptr)recv_d_mem;
     CUmemGenericAllocationHandle* p_memHandle = (CUmemGenericAllocationHandle*)recv_p_memHandle;
@@ -247,6 +248,8 @@ static PyObject* python_create_and_map(PyObject* self, PyObject* args) {
         // PyArg_ParseTuple sets an error if it fails
         return nullptr;
     }
+
+    std::cout << "[vllm_allocator_adaptor_c] " << "recv_device" << recv_device << "recv_size" << recv_size << "recv_d_mem" << recv_d_mem << "recv_p_memHandle" << recv_p_memHandle << std::endl;
 
     CUdeviceptr d_mem_ptr = (CUdeviceptr)recv_d_mem;
     CUmemGenericAllocationHandle* p_memHandle = (CUmemGenericAllocationHandle*)recv_p_memHandle;
