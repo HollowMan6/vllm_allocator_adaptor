@@ -8,6 +8,19 @@
 #include <sys/types.h>
 #include <cuda_runtime_api.h>
 #include <iostream>
+#include <cuda.h>
+
+char error_string[1024];
+
+#define CUDA_CHECK(condition) \
+    do { \
+        CUresult error = condition; \
+        if (error != 0) { \
+            cuGetErrorString(error, error_string); \
+            std::cerr << "[vllm_allocator_adaptor_c] CUDA Error: " << error_string << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
+            return nullptr; \
+        } \
+    } while (0)
 
 // Global references to Python callables
 // NOTE: this is borrowed reference, so we don't need to DECREF them.
@@ -21,6 +34,19 @@ extern "C" {
 
 void* my_malloc(ssize_t size, int device, cudaStream_t stream) 
 {
+
+    CUcontext pctx;
+    CUDA_CHECK(cuCtxGetCurrent(&pctx));
+    if (!pctx) {
+        // Ensure device context.
+        CUDA_CHECK(cuDevicePrimaryCtxRetain(&pctx, device));
+        CUDA_CHECK(cuCtxSetCurrent(pctx));
+    }
+
+    CUdeviceptr dptr;
+    CUDA_CHECK(cuMemAlloc(&dptr, size));
+
+    return reinterpret_cast<void*>(dptr);
 
     // device and stream are not used.
     // we will just use the current device and stream.
@@ -60,6 +86,9 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
 
 void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
 {
+    // do nothing
+    return;
+
     // device and stream are not used.
     // we will just use the current device and stream.
 
