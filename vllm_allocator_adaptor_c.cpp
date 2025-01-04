@@ -70,6 +70,25 @@ void unmap_and_release(int device, ssize_t size, CUdeviceptr d_mem, CUmemGeneric
     CUDA_CHECK(cuMemRelease(*p_memHandle));
 }
 
+PyObject* create_tuple_from_c_integers(int a, int b, int c, int d) {
+    // Create a new tuple of size 4
+    PyObject *tuple = PyTuple_New(4);
+    if (!tuple) {
+        return NULL; // Return NULL on failure
+    }
+
+    // Convert integers to Python objects and set them in the tuple
+    PyTuple_SetItem(tuple, 0, PyLong_FromLong(a)); // Steals reference to the PyLong
+    PyTuple_SetItem(tuple, 1, PyLong_FromLong(b));
+    PyTuple_SetItem(tuple, 2, PyLong_FromLong(c));
+    PyTuple_SetItem(tuple, 3, PyLong_FromLong(d));
+
+    // Note: PyTuple_SetItem "steals" a reference to each object,
+    // so we do not need to Py_DECREF the PyLong objects explicitly.
+
+    return tuple; // Return the created tuple
+}
+
 void* my_malloc(ssize_t size, int device, cudaStream_t stream) 
 {
     ensure_context(device);
@@ -103,48 +122,11 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     // Acquire GIL (not in stable ABI officially, but often works)
     PyGILState_STATE gstate = PyGILState_Ensure();
 
-    // Create Python int for 'device'
-    PyObject* py_device = PyLong_FromSsize_t(device);
-    if (!py_device) {
-        PyGILState_Release(gstate);
-        return nullptr;
-    }
+    PyObject* arg_tuple = create_tuple_from_c_integers(device, alignedSize, size_t(d_mem), size_t(p_memHandle));
 
-    // Create Python int for 'alignedSize'
-    PyObject* py_alignedSize = PyLong_FromSsize_t(alignedSize);
-    if (!py_alignedSize) {
-        Py_DECREF(py_device);
-        PyGILState_Release(gstate);
-        return nullptr;
-    }
-
-    // Create Python int for 'd_mem'
-    // assume size_t is the same as long long unsigned int
-    PyObject* py_d_mem = PyLong_FromSsize_t(size_t(d_mem));
-    if (!py_d_mem) {
-        Py_DECREF(py_device);
-        Py_DECREF(py_alignedSize);
-        PyGILState_Release(gstate);
-        return nullptr;
-    }
-
-    // Create Python int for 'p_memHandle'
-    // assume size_t is the same as long long unsigned int
-    PyObject* py_p_memHandle = PyLong_FromSsize_t(size_t(p_memHandle));
-    if (!py_p_memHandle) {
-        Py_DECREF(py_device);
-        Py_DECREF(py_alignedSize);
-        Py_DECREF(py_d_mem);
-        PyGILState_Release(gstate);
-        return nullptr;
-    }
-
-    // Call g_python_malloc_callback(py_alignedSize, py_d_mem, py_p_memHandle)
-    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_malloc_callback, py_device, py_alignedSize, py_d_mem, py_p_memHandle, NULL);
-    Py_DECREF(py_device);
-    Py_DECREF(py_alignedSize);
-    Py_DECREF(py_d_mem);
-    Py_DECREF(py_p_memHandle);
+    // Call g_python_malloc_callback
+    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_malloc_callback, arg_tuple, NULL);
+    Py_DECREF(arg_tuple);
 
     if (!py_result) {
         PyErr_Print();
@@ -172,23 +154,30 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
     PyGILState_STATE gstate = PyGILState_Ensure();
 
     PyObject* py_ptr  = PyLong_FromSize_t(reinterpret_cast<size_t>(ptr));
-    PyObject* py_size = PyLong_FromSsize_t(size);
 
-    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_free_callback, py_ptr, py_size, NULL);
+    PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_free_callback, py_ptr, NULL);
 
-    if (!py_result) {
-        PyErr_Print();
+    if (!py_result || !PyTuple_Check(py_result) || PyTuple_Size(py_result) != 4) {
+        PyErr_SetString(PyExc_TypeError, "Expected a tuple of size 4");
+        return;
     }
-    CUdeviceptr d_mem = (CUdeviceptr)ptr;
-    CUmemGenericAllocationHandle* p_memHandle = (CUmemGenericAllocationHandle*)PyLong_AsSize_t(py_result);
 
-    Py_DECREF(py_result);
-    Py_DECREF(py_ptr);
-    Py_DECREF(py_size);
+    int recv_device, recv_size, recv_d_mem, recv_p_memHandle;
+    // Unpack the tuple into four C integers
+    if (!PyArg_ParseTuple(py_result, "iiii", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+        // PyArg_ParseTuple sets an error if it fails
+        return;
+    }
 
     PyGILState_Release(gstate);
 
+    // recv_size == size
+    // recv_device == device
+
     // Free memory
+
+    CUdeviceptr d_mem = (CUdeviceptr)recv_d_mem;
+    CUmemGenericAllocationHandle* p_memHandle = (CUmemGenericAllocationHandle*)recv_p_memHandle;
     unmap_and_release(device, size, d_mem, p_memHandle);
 
     // free address and the handle
