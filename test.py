@@ -42,6 +42,7 @@ class CuMemAllocator:
         self.pointer_to_handle: Dict[int, HandleType] = {}
 
     def python_malloc_callback(self, allocation_handle: HandleType) -> None:
+        py_d_mem = allocation_handle[2]
         self.pointer_to_handle[py_d_mem] = allocation_handle
         return
 
@@ -53,7 +54,7 @@ class CuMemAllocator:
             unmap_and_release(handle)
 
     def remap(self):
-        for handle in pointer_to_handle.values():
+        for handle in self.pointer_to_handle.values():
             create_and_map(handle)
 
     @contextmanager
