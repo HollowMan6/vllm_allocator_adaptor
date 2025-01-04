@@ -6,8 +6,12 @@ from vllm_allocator_adaptor import use_memory_pool_with_allocator
 from cuda.bindings import driver
 import torch
 
+pointer_to_data = {}
+
 def python_malloc_callback(py_alignedSize, py_d_mem, py_memHandle):
     print(f"{(py_alignedSize, py_d_mem, py_memHandle)=}")
+    global pointer_to_data
+    pointer_to_data[py_d_mem] = (py_alignedSize, py_memHandle)
     return
     # allocate ptr
     result, ptr = driver.cuMemAddressReserve(size, 0, 0, 0)
@@ -39,8 +43,10 @@ def python_malloc_callback(py_alignedSize, py_d_mem, py_memHandle):
     return ptr.value
 
 def python_free_callback(ptr, size):
-    print(f"Python side: Free called with ptr=0x{ptr:x}, size={size}")
-    # cudart.cudaFree(ctypes.c_void_p(ptr))
+    global pointer_to_data
+    py_alignedSize, py_memHandle = pointer_to_data.pop(ptr)
+    assert py_alignedSize == size
+    return py_memHandle
 
 # default memory pool
 shape = (1024, 1024)

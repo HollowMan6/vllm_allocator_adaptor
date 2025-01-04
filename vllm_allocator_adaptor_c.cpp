@@ -28,12 +28,8 @@ static PyObject* g_python_free_callback   = nullptr;
 
 extern "C" {
 
-// ---------------------------------------------------------------------------
-// Our exported C functions that call Python:
-
-void* my_malloc(ssize_t size, int device, cudaStream_t stream) 
+void ensure_context(int device)
 {
-
     CUcontext pctx;
     CUDA_CHECK(cuCtxGetCurrent(&pctx));
     if (!pctx) {
@@ -41,6 +37,15 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
         CUDA_CHECK(cuDevicePrimaryCtxRetain(&pctx, device));
         CUDA_CHECK(cuCtxSetCurrent(pctx));
     }
+}
+
+// ---------------------------------------------------------------------------
+// Our exported C functions that call Python:
+
+void* my_malloc(ssize_t size, int device, cudaStream_t stream) 
+{
+
+    ensure_context(device);
 
     // Define memory allocation properties
     CUmemAllocationProp prop = {};
@@ -125,11 +130,7 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
 
 void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
 {
-    // do nothing
-    return;
-
-    // device and stream are not used.
-    // we will just use the current device and stream.
+    ensure_context(device);
 
     if (!g_python_free_callback) {
         std::cerr << "[vllm_allocator_adaptor_c] ERROR: g_python_free_callback not set.\n";
@@ -146,10 +147,17 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
 
     if (!py_result) {
         PyErr_Print();
-    } else {
-        Py_DECREF(py_result);
     }
 
+    // Free memory
+    CUdeviceptr d_mem = (CUdeviceptr)ptr;
+    CUmemGenericAllocationHandle* p_memHandle = (CUmemGenericAllocationHandle*)PyLong_AsSize_t(py_result);
+
+    CUDA_CHECK(cuMemUnmap(d_mem, size));
+    CUDA_CHECK(cuMemRelease(*p_memHandle));
+    CUDA_CHECK(cuMemAddressFree(d_mem, size));
+
+    Py_DECREF(py_result);
     Py_DECREF(py_ptr);
     Py_DECREF(py_size);
 
