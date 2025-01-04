@@ -72,8 +72,6 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
 
     CUDA_CHECK(cuMemSetAccess(d_mem, alignedSize, &accessDesc, 1));
 
-    return reinterpret_cast<void*>(d_mem);
-
     if (!g_python_malloc_callback) {
         std::cerr << "[vllm_allocator_adaptor_c] ERROR: g_python_malloc_callback not set.\n";
         return nullptr;
