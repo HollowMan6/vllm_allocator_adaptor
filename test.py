@@ -65,6 +65,7 @@ with use_memory_pool_with_allocator(python_malloc_callback, python_free_callback
     z += 2
     print(z)
 
+print(pointer_to_data)
 for _, handle in pointer_to_data.items():
     unmap_and_release(handle)
 
