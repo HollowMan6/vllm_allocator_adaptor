@@ -22,7 +22,7 @@ module = Extension(
 
 setup(
     name="vllm_allocator_adaptor",
-    version="0.1.0",
+    version="0.2.0",
     description="vLLM Allocator Adaptor (C/CUDA/Python) using callback shims",
     python_requires=">=3.8",
     ext_modules=[module],

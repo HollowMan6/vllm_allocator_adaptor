@@ -53,7 +53,7 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     size_t granularity;
     CUDA_CHECK(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
 
-    size_t alignedSize = ((memSize * sizeof(int) + granularity - 1) / granularity) * granularity;
+    size_t alignedSize = ((size + granularity - 1) / granularity) * granularity;
 
     // Allocate memory using cuMemCreate
     CUmemGenericAllocationHandle memHandle;
