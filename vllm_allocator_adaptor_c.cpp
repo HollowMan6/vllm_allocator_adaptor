@@ -10,8 +10,6 @@
 #include <iostream>
 #include <cuda.h>
 
-char error_string[1024];
-
 #define CUDA_CHECK(condition) \
     do { \
         CUresult error = condition; \
