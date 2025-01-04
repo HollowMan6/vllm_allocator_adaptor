@@ -2,14 +2,12 @@ import torch
 import ctypes
 
 from typing import Tuple
-from vllm_allocator_adaptor import use_memory_pool_with_allocator
+from vllm_allocator_adaptor import use_memory_pool_with_allocator, HandleType, create_and_map, unmap_and_release
 
 from cuda.bindings import driver
 import torch
 
 pointer_to_data = {}
-
-HandleType = Tuple[int, int, int, int]
 
 def python_malloc_callback(allocation_handle: HandleType) -> None:
     py_device, py_alignedSize, py_d_mem, py_p_memHandle = allocation_handle
@@ -66,6 +64,12 @@ with use_memory_pool_with_allocator(python_malloc_callback, python_free_callback
     z.zero_()
     z += 2
     print(z)
+
+for _, handle in pointer_to_data.items():
+    unmap_and_release(handle)
+
+for _, handle in pointer_to_data.items():
+    create_and_map(handle)
 
 output = x + y + z
 print(output)

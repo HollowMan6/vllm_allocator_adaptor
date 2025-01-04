@@ -2,6 +2,7 @@ import vllm_allocator_adaptor_c
 import torch
 
 from typing import Optional, Callable
+from typing import Tuple
 from contextlib import contextmanager
 
 def find_loaded_library(lib_name) -> Optional[str]:
@@ -46,3 +47,12 @@ def use_memory_pool_with_allocator(python_malloc_fn: Callable[[int], int], pytho
     mem_pool = torch.cuda.memory.MemPool(new_alloc._allocator)
     with torch.cuda.memory.use_mem_pool(mem_pool):
         yield mem_pool
+
+# py_device, py_alignedSize, py_d_mem, py_p_memHandle
+HandleType = Tuple[int, int, int, int]
+
+def create_and_map(allocation_handle: HandleType) -> None:
+    vllm_allocator_adaptor_c.python_create_and_map(*allocation_handle)
+
+def unmap_and_release(allocation_handle: HandleType) -> None:
+    vllm_allocator_adaptor_c.python_unmap_and_release(*allocation_handle)

@@ -214,12 +214,66 @@ static PyObject* py_init_module(PyObject* self, PyObject* args)
     Py_RETURN_NONE;
 }
 
+static PyObject* python_unmap_and_release(PyObject* self, PyObject* args) {
+    if (!args || !PyTuple_Check(args) || PyTuple_Size(args) != 4) {
+        PyErr_SetString(PyExc_TypeError, "Expected a tuple of size 4");
+        return nullptr;
+    }
+
+    int recv_device, recv_size, recv_d_mem, recv_p_memHandle;
+    // Unpack the tuple into four C integers
+    if (!PyArg_ParseTuple(args, "iiii", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+        // PyArg_ParseTuple sets an error if it fails
+        return nullptr;
+    }
+
+    CUdeviceptr d_mem_ptr = reinterpret_cast<CUdeviceptr>(d_mem);
+    CUmemGenericAllocationHandle* p_memHandle = reinterpret_cast<CUmemGenericAllocationHandle*>(recv_p_memHandle);
+
+    unmap_and_release(recv_device, recv_size, d_mem_ptr, p_memHandle);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject* python_create_and_map(PyObject* self, PyObject* args) {
+    if (!args || !PyTuple_Check(args) || PyTuple_Size(args) != 4) {
+        PyErr_SetString(PyExc_TypeError, "Expected a tuple of size 4");
+        return nullptr;
+    }
+
+    int recv_device, recv_size, recv_d_mem, recv_p_memHandle;
+    // Unpack the tuple into four C integers
+    if (!PyArg_ParseTuple(args, "iiii", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+        // PyArg_ParseTuple sets an error if it fails
+        return nullptr;
+    }
+
+    CUdeviceptr d_mem_ptr = reinterpret_cast<CUdeviceptr>(d_mem);
+    CUmemGenericAllocationHandle* p_memHandle = reinterpret_cast<CUmemGenericAllocationHandle*>(recv_p_memHandle);
+
+    create_and_map(recv_device, recv_size, d_mem_ptr, p_memHandle);
+
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_methods[] = {
     {
         "init_module",
         (PyCFunction)py_init_module,
         METH_VARARGS,
         "Initialize module with python_malloc and python_free callables."
+    },
+    {
+        "python_create_and_map",
+        (PyCFunction)python_create_and_map,
+        METH_VARARGS,
+        "Create and map memory on the device."
+    },
+    {
+        "python_unmap_and_release",
+        (PyCFunction)python_unmap_and_release,
+        METH_VARARGS,
+        "Unmap and release memory on the device."
     },
     {NULL, NULL, 0, NULL}  // sentinel
 };
