@@ -42,6 +42,38 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
         CUDA_CHECK(cuCtxSetCurrent(pctx));
     }
 
+    // Define memory allocation properties
+    CUmemAllocationProp prop = {};
+    prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    prop.location.id = device;
+    prop.allocFlags.compressionType = CU_MEM_ALLOCATION_COMP_NONE;
+
+    // Check if the allocation is supported
+    size_t granularity;
+    CUDA_CHECK(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
+
+    size_t alignedSize = ((memSize * sizeof(int) + granularity - 1) / granularity) * granularity;
+
+    // Allocate memory using cuMemCreate
+    CUmemGenericAllocationHandle memHandle;
+    CUDA_CHECK(cuMemCreate(&memHandle, alignedSize, &prop, 0));
+
+    CUdeviceptr d_mem; // Device pointer
+    // Map memory to a device pointer
+    CUDA_CHECK(cuMemAddressReserve(&d_mem, alignedSize, 0, 0, 0));
+
+    CUDA_CHECK(cuMemMap(d_mem, alignedSize, 0, memHandle, 0));
+
+    CUmemAccessDesc accessDesc = {};
+    accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    accessDesc.location.id = device;
+    accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+
+    CUDA_CHECK(cuMemSetAccess(d_mem, alignedSize, &accessDesc, 1));
+
+    return reinterpret_cast<void*>(d_mem);
+
     CUdeviceptr dptr;
     CUDA_CHECK(cuMemAlloc(&dptr, size));
 
