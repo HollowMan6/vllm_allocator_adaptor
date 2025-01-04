@@ -1,52 +1,31 @@
+# cumem-based pytorch pluggable allocator
+# other approaches tried but failed:
+# - cuda-python package binding
+# - custom libcuda driver ctypes wrapper
+# both of them failed because of cuda context mismatch. they are created from a different context.
+# the only successful approach is to call cuda driver API in C.
 import torch
 import ctypes
 
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 from vllm_allocator_adaptor import use_memory_pool_with_allocator, HandleType, create_and_map, unmap_and_release
 
 import torch
 from contextlib import contextmanager
 
-# # allocate ptr
-# result, ptr = driver.cuMemAddressReserve(size, 0, 0, 0)
-# assert result.value == 0
-
-# # allocate the handle
-# prop = driver.CUmemAllocationProp()
-# prop.type = driver.CUmemAllocationType.CU_MEM_ALLOCATION_TYPE_PINNED
-# prop.requestedHandleTypes = driver.CUmemAllocationHandleType.CU_MEM_HANDLE_TYPE_NONE
-# prop.location.type = driver.CUmemLocationType.CU_MEM_LOCATION_TYPE_DEVICE
-# prop.location.id = torch.cuda.current_device()
-# prop.win32HandleMetaData = 0 # this is very critical, cannot use ctypes.c_void_p(0)
-# result, handle = driver.cuMemCreate(size, prop, 0)
-# assert result.value == 0
-
-# # map the memory
-# result, = driver.cuMemMap(ptr, size, 0, handle, 0)
-# assert result.value == 0
-
-# # set access
-# access = driver.CUmemAccessDesc()
-# access.location.type = driver.CUmemLocationType.CU_MEM_LOCATION_TYPE_DEVICE
-# access.location.id = torch.cuda.current_device()
-# access.flags = driver.CUmemAccess_flags.CU_MEM_ACCESS_FLAGS_PROT_READWRITE
-# result, = driver.cuMemSetAccess(ptr, size, [access], 1)
-# assert result.value == 0
-
-# print(f"Python side: Malloc called with size={size}, ptr=0x{ptr:x}")
-# return ptr.value
-
-
 class CuMemAllocator:
     def __init__(self):
         self.pointer_to_handle: Dict[int, HandleType] = {}
+        self.pointer_to_cpu_pointer: Dict[int, Optional[int]] = {}
 
     def python_malloc_callback(self, allocation_handle: HandleType) -> None:
         py_d_mem = allocation_handle[2]
         self.pointer_to_handle[py_d_mem] = allocation_handle
+        self.pointer_to_cpu_pointer[py_d_mem] = None
         return
 
     def python_free_callback(self, ptr: int) -> HandleType:
+        cpu_ptr = self.pointer_to_cpu_pointer.pop(ptr)
         return self.pointer_to_handle.pop(ptr)
 
     def unmap(self):
