@@ -90,7 +90,8 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     }
 
     // Create Python int for 'd_mem'
-    PyObject* py_d_mem = PyLong_FromSsize_t(reinterpret_cast<size_t>(d_mem));
+    // assume size_t is the same as long long unsigned int
+    PyObject* py_d_mem = PyLong_FromSsize_t(size_t(d_mem));
     if (!py_d_mem) {
         Py_DECREF(py_alignedSize);
         PyGILState_Release(gstate);
@@ -98,7 +99,8 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     }
 
     // Create Python int for '&memHandle'
-    PyObject* py_memHandle = PyLong_FromSsize_t(reinterpret_cast<size_t>(&memHandle));
+    // assume size_t is the same as long long unsigned int
+    PyObject* py_memHandle = PyLong_FromSsize_t(size_t(&memHandle));
     if (!py_memHandle) {
         Py_DECREF(py_alignedSize);
         Py_DECREF(py_d_mem);
@@ -119,7 +121,8 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     }
 
     PyGILState_Release(gstate);
-    return d_mem;
+    // assume size_t is the same as long long unsigned int
+    return (void*)d_mem;
 }
 
 void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)

@@ -38,7 +38,7 @@ def python_malloc_callback(py_alignedSize, py_d_mem, py_memHandle):
     print(f"Python side: Malloc called with size={size}, ptr=0x{ptr:x}")
     return ptr.value
 
-def python_free(ptr, size):
+def python_free_callback(ptr, size):
     print(f"Python side: Free called with ptr=0x{ptr:x}, size={size}")
     # cudart.cudaFree(ctypes.c_void_p(ptr))
 
@@ -48,7 +48,7 @@ x = torch.empty(shape, device='cuda')
 x.zero_()
 print(x)
 
-with use_memory_pool_with_allocator(python_malloc, python_free):
+with use_memory_pool_with_allocator(python_malloc_callback, python_free_callback):
     # custom memory pool
     y = torch.empty(shape, device='cuda')
     y.zero_()
