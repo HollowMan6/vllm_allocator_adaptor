@@ -17,7 +17,6 @@
             char* error_string; \
             cuGetErrorString(error, (const char**)&error_string); \
             std::cerr << "[vllm_allocator_adaptor_c] CUDA Error: " << error_string << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
-            return nullptr; \
         } \
     } while (0)
 
