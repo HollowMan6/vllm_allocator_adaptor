@@ -59,7 +59,9 @@ with allocator.use_memory_pool():
     z += 2
     print(z)
 
+print(torch.cuda.mem_get_info())
 allocator.unmap()
+print(torch.cuda.mem_get_info())
 allocator.remap()
 
 output = x + y + z
