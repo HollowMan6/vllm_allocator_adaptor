@@ -70,7 +70,7 @@ void unmap_and_release(int device, ssize_t size, CUdeviceptr d_mem, CUmemGeneric
     CUDA_CHECK(cuMemRelease(*p_memHandle));
 }
 
-PyObject* create_tuple_from_c_integers(int a, int b, int c, int d) {
+PyObject* create_tuple_from_c_integers(int a, int b, unsigned long long c, unsigned long long d) {
     // Create a new tuple of size 4
     PyObject *tuple = PyTuple_New(4);
     if (!tuple) {
@@ -80,8 +80,8 @@ PyObject* create_tuple_from_c_integers(int a, int b, int c, int d) {
     // Convert integers to Python objects and set them in the tuple
     PyTuple_SetItem(tuple, 0, PyLong_FromLong(a)); // Steals reference to the PyLong
     PyTuple_SetItem(tuple, 1, PyLong_FromLong(b));
-    PyTuple_SetItem(tuple, 2, PyLong_FromLong(c));
-    PyTuple_SetItem(tuple, 3, PyLong_FromLong(d));
+    PyTuple_SetItem(tuple, 2, PyLong_FromUnsignedLongLong(c));
+    PyTuple_SetItem(tuple, 3, PyLong_FromUnsignedLongLong(d));
 
     // Note: PyTuple_SetItem "steals" a reference to each object,
     // so we do not need to Py_DECREF the PyLong objects explicitly.
@@ -122,7 +122,7 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     // Acquire GIL (not in stable ABI officially, but often works)
     PyGILState_STATE gstate = PyGILState_Ensure();
 
-    PyObject* arg_tuple = create_tuple_from_c_integers(device, alignedSize, size_t(d_mem), size_t(p_memHandle));
+    PyObject* arg_tuple = create_tuple_from_c_integers(device, alignedSize, (unsigned long long)d_mem, (unsigned long long)p_memHandle);
 
     // Call g_python_malloc_callback
     PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_malloc_callback, arg_tuple, NULL);
@@ -153,7 +153,7 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
     // Acquire GIL (not in stable ABI officially, but often works)
     PyGILState_STATE gstate = PyGILState_Ensure();
 
-    PyObject* py_ptr  = PyLong_FromSize_t(reinterpret_cast<size_t>(ptr));
+    PyObject* py_ptr  = PyLong_FromUnsignedLongLong(reinterpret_cast<unsigned long long>(ptr));
 
     PyObject* py_result = PyObject_CallFunctionObjArgs(g_python_free_callback, py_ptr, NULL);
 
@@ -162,9 +162,10 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
         return;
     }
 
-    int recv_device, recv_size, recv_d_mem, recv_p_memHandle;
+    int recv_device, recv_size;
+    unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
-    if (!PyArg_ParseTuple(py_result, "iiii", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+    if (!PyArg_ParseTuple(py_result, "iiKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
         // PyArg_ParseTuple sets an error if it fails
         return;
     }
@@ -220,9 +221,10 @@ static PyObject* python_unmap_and_release(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
-    int recv_device, recv_size, recv_d_mem, recv_p_memHandle;
+    int recv_device, recv_size;
+    unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
-    if (!PyArg_ParseTuple(args, "iiii", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+    if (!PyArg_ParseTuple(args, "iiKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
         // PyArg_ParseTuple sets an error if it fails
         return nullptr;
     }
@@ -244,9 +246,10 @@ static PyObject* python_create_and_map(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
-    int recv_device, recv_size, recv_d_mem, recv_p_memHandle;
+    int recv_device, recv_size;
+    unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
-    if (!PyArg_ParseTuple(args, "iiii", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+    if (!PyArg_ParseTuple(args, "iiKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
         // PyArg_ParseTuple sets an error if it fails
         return nullptr;
     }
