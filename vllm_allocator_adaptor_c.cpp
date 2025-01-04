@@ -1,6 +1,7 @@
 // file: vllm_allocator_adaptor_c.cpp
 //
 // An adaptor to pass Python function to PyTorch's pluggable allocator.
+// Important: CUdeviceptr and CUmemGenericAllocationHandle* need to be unsigned long long
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -228,12 +229,9 @@ static PyObject* python_unmap_and_release(PyObject* self, PyObject* args) {
         // PyArg_ParseTuple sets an error if it fails
         return nullptr;
     }
-    std::cout << "[vllm_allocator_adaptor_c] " << "recv_device" << recv_device << "recv_size" << recv_size << "recv_d_mem" << recv_d_mem << "recv_p_memHandle" << recv_p_memHandle << std::endl;
 
     CUdeviceptr d_mem_ptr = (CUdeviceptr)recv_d_mem;
     CUmemGenericAllocationHandle* p_memHandle = (CUmemGenericAllocationHandle*)recv_p_memHandle;
-
-    std::cout << "[vllm_allocator_adaptor_c] " << "d_mem_ptr" << d_mem_ptr << std::endl;
 
     unmap_and_release(recv_device, recv_size, d_mem_ptr, p_memHandle);
 
@@ -254,12 +252,9 @@ static PyObject* python_create_and_map(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
-    std::cout << "[vllm_allocator_adaptor_c] " << "recv_device" << recv_device << "recv_size" << recv_size << "recv_d_mem" << recv_d_mem << "recv_p_memHandle" << recv_p_memHandle << std::endl;
-
     CUdeviceptr d_mem_ptr = (CUdeviceptr)recv_d_mem;
     CUmemGenericAllocationHandle* p_memHandle = (CUmemGenericAllocationHandle*)recv_p_memHandle;
 
-    std::cout << "[vllm_allocator_adaptor_c] " << "d_mem_ptr" << d_mem_ptr << std::endl;
     create_and_map(recv_device, recv_size, d_mem_ptr, p_memHandle);
 
     Py_RETURN_NONE;
