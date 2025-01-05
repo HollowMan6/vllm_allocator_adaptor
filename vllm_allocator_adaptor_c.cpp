@@ -1,7 +1,7 @@
 // file: vllm_allocator_adaptor_c.cpp
 //
 // An adaptor to pass Python function to PyTorch's pluggable allocator.
-// Important: CUdeviceptr and CUmemGenericAllocationHandle* need to be unsigned long long
+// Important: allocation size, CUdeviceptr and CUmemGenericAllocationHandle* need to be unsigned long long
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -28,7 +28,7 @@ static PyObject* g_python_free_callback   = nullptr;
 
 extern "C" {
 
-void ensure_context(int device)
+void ensure_context(unsigned long long device)
 {
     CUcontext pctx;
     CUDA_CHECK(cuCtxGetCurrent(&pctx));
@@ -42,7 +42,7 @@ void ensure_context(int device)
 // ---------------------------------------------------------------------------
 // Our exported C functions that call Python:
 
-void create_and_map(int device, ssize_t size, CUdeviceptr d_mem, CUmemGenericAllocationHandle* p_memHandle)
+void create_and_map(unsigned long long device, ssize_t size, CUdeviceptr d_mem, CUmemGenericAllocationHandle* p_memHandle)
 {
     ensure_context(device);
     // Define memory allocation properties
@@ -62,16 +62,18 @@ void create_and_map(int device, ssize_t size, CUdeviceptr d_mem, CUmemGenericAll
     accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
 
     CUDA_CHECK(cuMemSetAccess(d_mem, size, &accessDesc, 1));
+    // std::cout << "[vllm_allocator_adaptor_c] create_and_map: device=" << device << ", size=" << size << ", d_mem=" << d_mem << ", p_memHandle=" << p_memHandle << std::endl;
 }
 
-void unmap_and_release(int device, ssize_t size, CUdeviceptr d_mem, CUmemGenericAllocationHandle* p_memHandle)
+void unmap_and_release(unsigned long long device, ssize_t size, CUdeviceptr d_mem, CUmemGenericAllocationHandle* p_memHandle)
 {
+    // std::cout << "[vllm_allocator_adaptor_c] unmap_and_release: device=" << device << ", size=" << size << ", d_mem=" << d_mem << ", p_memHandle=" << p_memHandle << std::endl;
     ensure_context(device);
     CUDA_CHECK(cuMemUnmap(d_mem, size));
     CUDA_CHECK(cuMemRelease(*p_memHandle));
 }
 
-PyObject* create_tuple_from_c_integers(int a, int b, unsigned long long c, unsigned long long d) {
+PyObject* create_tuple_from_c_integers(unsigned long long a, unsigned long long b, unsigned long long c, unsigned long long d) {
     // Create a new tuple of size 4
     PyObject *tuple = PyTuple_New(4);
     if (!tuple) {
@@ -163,7 +165,7 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
         return;
     }
 
-    int recv_device, recv_size;
+    unsigned long long recv_device, recv_size;
     unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
     if (!PyArg_ParseTuple(py_result, "KKKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
@@ -222,7 +224,7 @@ static PyObject* python_unmap_and_release(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
-    int recv_device, recv_size;
+    unsigned long long recv_device, recv_size;
     unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
     if (!PyArg_ParseTuple(args, "KKKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
@@ -244,7 +246,7 @@ static PyObject* python_create_and_map(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
-    int recv_device, recv_size;
+    unsigned long long recv_device, recv_size;
     unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
     if (!PyArg_ParseTuple(args, "KKKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
