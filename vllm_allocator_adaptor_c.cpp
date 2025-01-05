@@ -166,7 +166,7 @@ void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
     int recv_device, recv_size;
     unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
-    if (!PyArg_ParseTuple(py_result, "iiKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+    if (!PyArg_ParseTuple(py_result, "KKKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
         // PyArg_ParseTuple sets an error if it fails
         return;
     }
@@ -225,7 +225,7 @@ static PyObject* python_unmap_and_release(PyObject* self, PyObject* args) {
     int recv_device, recv_size;
     unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
-    if (!PyArg_ParseTuple(args, "iiKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+    if (!PyArg_ParseTuple(args, "KKKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
         // PyArg_ParseTuple sets an error if it fails
         return nullptr;
     }
@@ -247,7 +247,7 @@ static PyObject* python_create_and_map(PyObject* self, PyObject* args) {
     int recv_device, recv_size;
     unsigned long long recv_d_mem, recv_p_memHandle;
     // Unpack the tuple into four C integers
-    if (!PyArg_ParseTuple(args, "iiKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
+    if (!PyArg_ParseTuple(args, "KKKK", &recv_device, &recv_size, &recv_d_mem, &recv_p_memHandle)) {
         // PyArg_ParseTuple sets an error if it fails
         return nullptr;
     }
