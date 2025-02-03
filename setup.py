@@ -1,20 +1,15 @@
 # file: setup.py
 from setuptools import setup, Extension
-import sys
-from torch.utils.cpp_extension import CUDA_HOME
 
 # Adjust this if needed for your CUDA install:
-if CUDA_HOME is not None:
-    cuda_include_dir = CUDA_HOME + "/include"
-else:
-    cuda_include_dir = "/usr/local/cuda/include"
+cuda_include_dir = "/appl/lumi/SW/CrayEnv/EB/rocm/6.2.2/include/"
 
 module = Extension(
     name="vllm_allocator_adaptor_c",
     sources=["vllm_allocator_adaptor_c.cpp"],
     include_dirs=[cuda_include_dir],  # Only your CUDA path, Python is auto-detected
-    extra_compile_args=["-fPIC"],
-    libraries=["cuda"],  # Link against the libcuda library
+    extra_compile_args=["-fPIC", "-D", "__HIP_PLATFORM_AMD__"],
+    libraries=["amdhip64"],  # Link against the libcuda library
     # Tell setuptools we want an abi3 wheel (for CPython >=3.8):
     py_limited_api=True,
     define_macros=[("Py_LIMITED_API", "0x03080000")],

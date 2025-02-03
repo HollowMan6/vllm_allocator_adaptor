@@ -7,9 +7,92 @@
 #include <Python.h>
 
 #include <sys/types.h>
-#include <cuda_runtime_api.h>
 #include <iostream>
-#include <cuda.h>
+
+#include <hip/hip_runtime_api.h>
+
+extern "C" {
+#ifndef CUDA_SUCCESS
+    #define CUDA_SUCCESS hipSuccess
+#endif  // CUDA_SUCCESS
+
+// https://rocm.docs.amd.com/projects/HIPIFY/en/latest/tables/CUDA_Driver_API_functions_supported_by_HIP.html
+typedef unsigned long long CUdevice;
+typedef hipDeviceptr_t CUdeviceptr;
+typedef hipError_t CUresult;
+typedef hipCtx_t CUcontext;
+typedef hipStream_t CUstream;
+typedef hipMemGenericAllocationHandle_t CUmemGenericAllocationHandle;
+typedef hipMemAllocationGranularity_flags CUmemAllocationGranularity_flags;
+typedef hipMemAllocationProp CUmemAllocationProp;
+typedef hipMemAccessDesc CUmemAccessDesc;
+
+#define CU_MEM_ALLOCATION_TYPE_PINNED hipMemAllocationTypePinned
+#define CU_MEM_LOCATION_TYPE_DEVICE hipMemLocationTypeDevice
+#define CU_MEM_ACCESS_FLAGS_PROT_READWRITE hipMemAccessFlagsProtReadWrite
+#define CU_MEM_ALLOC_GRANULARITY_MINIMUM hipMemAllocationGranularityMinimum
+
+// https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html
+#define CU_MEM_ALLOCATION_COMP_NONE 0x0
+
+// Error Handling
+// https://docs.nvidia.com/cuda/archive/11.4.4/cuda-driver-api/group__CUDA__ERROR.html
+CUresult cuGetErrorString(CUresult hipError, const char** pStr) {
+    *pStr = hipGetErrorString(hipError);
+    return CUDA_SUCCESS;
+}
+
+// Context Management
+// https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html
+CUresult cuCtxGetCurrent(CUcontext *ctx) {
+    // This API is deprecated on the AMD platform, only for equivalent cuCtx driver API on the NVIDIA platform.
+    return hipCtxGetCurrent(ctx);
+}
+
+CUresult cuCtxSetCurrent(CUcontext ctx) {
+    // This API is deprecated on the AMD platform, only for equivalent cuCtx driver API on the NVIDIA platform.
+    return hipCtxSetCurrent(ctx);
+}
+
+// Primary Context Management
+// https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__PRIMARY__CTX.html
+CUresult cuDevicePrimaryCtxRetain(CUcontext *ctx, CUdevice dev) {
+    return hipDevicePrimaryCtxRetain(ctx, dev);
+}
+
+// Virtual Memory Management
+// https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__VA.html
+CUresult cuMemAddressFree(CUdeviceptr ptr, size_t size) {
+    return hipMemAddressFree(ptr, size);
+}
+
+CUresult cuMemAddressReserve(CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr, unsigned long long flags) {
+    return hipMemAddressReserve(ptr, size, alignment, addr, flags);
+}
+
+CUresult cuMemCreate(CUmemGenericAllocationHandle* handle, size_t size, const CUmemAllocationProp* prop, unsigned long long flags ) {
+    return hipMemCreate(handle, size, prop, flags);
+}
+
+CUresult cuMemGetAllocationGranularity(size_t* granularity, const CUmemAllocationProp* prop, CUmemAllocationGranularity_flags option) {
+    return hipMemGetAllocationGranularity(granularity, prop, option);
+}
+
+CUresult cuMemMap(CUdeviceptr dptr, size_t size, size_t offset, CUmemGenericAllocationHandle handle, unsigned long long flags) {
+    return hipMemMap(dptr, size, offset, handle, flags);
+}
+
+CUresult cuMemRelease(CUmemGenericAllocationHandle handle) {
+    return hipMemRelease(handle);
+}
+
+CUresult cuMemSetAccess(CUdeviceptr ptr, size_t size, const CUmemAccessDesc* desc, size_t count) {
+    return hipMemSetAccess(ptr, size, desc, count);
+}
+
+CUresult cuMemUnmap(CUdeviceptr ptr, size_t size) {
+    return hipMemUnmap(ptr, size);
+}
 
 #define CUDA_CHECK(condition) \
     do { \
@@ -25,8 +108,6 @@
 // NOTE: this is borrowed reference, so we don't need to DECREF them.
 static PyObject* g_python_malloc_callback = nullptr;
 static PyObject* g_python_free_callback   = nullptr;
-
-extern "C" {
 
 void ensure_context(unsigned long long device)
 {
@@ -62,12 +143,12 @@ void create_and_map(unsigned long long device, ssize_t size, CUdeviceptr d_mem, 
     accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
 
     CUDA_CHECK(cuMemSetAccess(d_mem, size, &accessDesc, 1));
-    // std::cout << "[vllm_allocator_adaptor_c] create_and_map: device=" << device << ", size=" << size << ", d_mem=" << d_mem << ", p_memHandle=" << p_memHandle << std::endl;
+    std::cout << "[vllm_allocator_adaptor_c] create_and_map: device=" << device << ", size=" << size << ", d_mem=" << d_mem << ", p_memHandle=" << p_memHandle << std::endl;
 }
 
 void unmap_and_release(unsigned long long device, ssize_t size, CUdeviceptr d_mem, CUmemGenericAllocationHandle* p_memHandle)
 {
-    // std::cout << "[vllm_allocator_adaptor_c] unmap_and_release: device=" << device << ", size=" << size << ", d_mem=" << d_mem << ", p_memHandle=" << p_memHandle << std::endl;
+    std::cout << "[vllm_allocator_adaptor_c] unmap_and_release: device=" << device << ", size=" << size << ", d_mem=" << d_mem << ", p_memHandle=" << p_memHandle << std::endl;
     ensure_context(device);
     CUDA_CHECK(cuMemUnmap(d_mem, size));
     CUDA_CHECK(cuMemRelease(*p_memHandle));
@@ -92,7 +173,7 @@ PyObject* create_tuple_from_c_integers(unsigned long long a, unsigned long long 
     return tuple; // Return the created tuple
 }
 
-void* my_malloc(ssize_t size, int device, cudaStream_t stream) 
+void* my_malloc(ssize_t size, int device, CUstream stream) 
 {
     ensure_context(device);
 
@@ -112,6 +193,7 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     size_t alignedSize = ((size + granularity - 1) / granularity) * granularity;
 
     CUdeviceptr d_mem;
+    std::cout << "[vllm_allocator_adaptor_c] create_and_map: device=" << d_mem << ", size=" << alignedSize << std::endl;
     CUDA_CHECK(cuMemAddressReserve(&d_mem, alignedSize, 0, 0, 0));
 
     // allocate the CUmemGenericAllocationHandle
@@ -145,7 +227,7 @@ void* my_malloc(ssize_t size, int device, cudaStream_t stream)
     return (void*)d_mem;
 }
 
-void my_free(void* ptr, ssize_t size, int device, cudaStream_t stream)
+void my_free(void* ptr, ssize_t size, int device, CUstream stream)
 {
     // get memory handle from the pointer
     if (!g_python_free_callback) {
